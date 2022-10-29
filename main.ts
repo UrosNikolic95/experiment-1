@@ -48,9 +48,35 @@ function getAllResources(num: number) {
   return Array.from({ length: num }, (v, i) => i);
 }
 
+function forEachOne(resource_number: number) {
+  const all = getAllResources(resource_number);
+  const entities: IEntity[] = [];
+  for (const resource of all) {
+    const { picked: used } = pickRandomItems(all, 5);
+
+    entities.push({
+      money: 10000000,
+      resources: used.reduce((a, res) => {
+        const sign = resource == res ? +100 : -1;
+        const total_quantity = randIntV2(30, 200);
+        const total_spent_money = randIntV2(30, 200);
+        a[res] = {
+          total_quantity,
+          total_spent_money,
+          produced_consumed: randIntV2(5, 100) * sign,
+          selling_price: 0,
+        } as IItemInventoryData;
+        return a;
+      }, {} as IInventoryData),
+    });
+  }
+  return entities;
+}
+
 function initEntities(entities_number: number, resource_number: number) {
   const entities: IEntity[] = [];
-  for (let i1 = 0; i1 < entities_number; i1++) {
+  const length = entities_number - entities.length;
+  for (let i1 = 0; i1 < length; i1++) {
     const all = getAllResources(resource_number);
     const { picked: used } = pickRandomItems(all, 5);
     const { picked, not_picked } = pickRandomItems(used, 1);
@@ -127,9 +153,8 @@ function checkResourceRequirements(entity: IEntity) {
     .filter((resource) => entity.resources[resource].produced_consumed < 0) // take in consideration only consumption (negative values)
     .every(
       (resource) =>
-        entity.resources[resource].total_quantity +
-          entity.resources[resource].produced_consumed >=
-        0
+        entity.resources[resource].total_quantity >=
+        -entity.resources[resource].produced_consumed
     );
 }
 
@@ -165,21 +190,27 @@ function produce(entity: IEntity) {
         cost_per_unit * entity.resources[resource].produced_consumed;
       entity.resources[resource].total_quantity +=
         entity.resources[resource].produced_consumed;
+      if (
+        entity.resources[resource].produced_consumed >
+        entity.resources[resource].total_quantity
+      )
+        return;
       if (entity.resources[resource].produced_consumed < 0) {
         // if the resource is spent then cost is reduced and sent to produced resource
         entity.resources[resource].total_spent_money -= resource_cost;
       } else {
-        entity.resources[resource].total_spent_money -=
+        entity.resources[resource].total_spent_money -= Math.min(
           (total_cost * entity.resources[resource].selling_price) /
-          total_selling_price;
+            total_selling_price,
+          entity.resources[resource].total_spent_money
+        );
       }
       if (entity.resources[resource].total_spent_money < 0) {
         throw new Error(
           [
             "8!",
-            entity.resources[resource].selling_price,
-            total_selling_price,
-            total_cost,
+            entity.resources[resource].total_spent_money,
+            resource_cost,
           ].join("    ")
         );
       }
@@ -230,15 +261,14 @@ function captureMax(category: string, val: number) {
   if (!max[category] || max[category] < val) max[category] = val;
 }
 
-function exchange(entities: IEntity[]) {
+function exchangeAll(entities: IEntity[]) {
   entities.forEach((buyer) => {
     Object.keys(buyer.resources).forEach((resource) => {
       const rData = buyer.resources[resource];
       if (rData.produced_consumed < 0) {
         const iterations = rData.total_quantity / -rData.produced_consumed;
 
-        if (iterations < 0) console.log("1!");
-        if (iterations < 3) {
+        if (iterations < 3 && iterations >= 0) {
           const sellers = entities
             .filter((el) => el.resources[resource])
             .filter((el) => el.resources[resource].selling_price > 0)
@@ -253,10 +283,7 @@ function exchange(entities: IEntity[]) {
               seller.resources[resource];
             const selling_cost = selling_price * quantity;
             const production_cost_per_item = total_spent_money / total_quantity;
-            const production_cost = Math.min(
-              production_cost_per_item * quantity,
-              total_spent_money
-            );
+            const production_cost = production_cost_per_item * quantity;
 
             if (production_cost < 0) {
               console.log("4!", total_spent_money, total_quantity, quantity);
@@ -270,15 +297,11 @@ function exchange(entities: IEntity[]) {
               seller.money += selling_cost;
               buyer.money -= selling_cost;
               const quantity = -buyer.resources[resource].produced_consumed;
+
               buyer.resources[resource].total_quantity += quantity;
               buyer.resources[resource].total_spent_money += selling_cost;
               seller.resources[resource].total_quantity -= quantity;
               seller.resources[resource].total_spent_money -= production_cost;
-
-              captureMin("production_cost", production_cost);
-              captureMax("production_cost", production_cost);
-              captureMin("money", seller.money);
-              captureMax("money", buyer.money);
 
               if (buyer.resources[resource].total_spent_money < -0.00001) {
                 console.log(seller.resources[resource]);
@@ -336,9 +359,9 @@ async function main() {
   let a2 = -1;
   let a3 = -1;
   let a4 = -1;
-  for (let i = 0; i < 3000; i++) {
+  for (let i = 0; i < 1000; i++) {
     produceAll(entities);
-    exchange(entities);
+    exchangeAll(entities);
     if (numberWithRequirementsV1() == 0 && a1 == -1) a1 = i;
     if (numberWithRequirementsV2() == 0 && a2 == -1) a2 = i;
     if (entities.some((el) => el.money < 0) && a3 == -1) a3 = i;
