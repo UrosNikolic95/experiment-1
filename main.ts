@@ -52,7 +52,8 @@ function forEachOne(resource_number: number) {
   const all = getAllResources(resource_number);
   const entities: IEntity[] = [];
   for (const resource of all) {
-    const { picked: used } = pickRandomItems(all, 5);
+    const { picked: used } = pickRandomItems(all, 7);
+    if (!used.includes(resource)) used.push(resource);
 
     entities.push({
       money: 10000000,
@@ -74,7 +75,7 @@ function forEachOne(resource_number: number) {
 }
 
 function initEntities(entities_number: number, resource_number: number) {
-  const entities: IEntity[] = [];
+  const entities: IEntity[] = [...forEachOne(resource_number)];
   const length = entities_number - entities.length;
   for (let i1 = 0; i1 < length; i1++) {
     const all = getAllResources(resource_number);
@@ -173,6 +174,8 @@ function calculateTotalCost(entity: IEntity) {
 }
 
 function produce(entity: IEntity) {
+  captureMin("money", entity.money);
+  captureMax("money", entity.money);
   const total_cost = calculateTotalCost(entity);
   if (checkResourceRequirements(entity)) {
     const total_selling_price = Object.keys(entity.resources)
@@ -355,19 +358,33 @@ function detectError1(entities: IEntity[]) {
 }
 
 async function main() {
-  let a1 = -1;
+  let a1a = -1;
+  let a1b = -1;
   let a2 = -1;
   let a3 = -1;
   let a4 = -1;
-  for (let i = 0; i < 1000; i++) {
+  for (let i = 0; i < 5000; i++) {
     produceAll(entities);
     exchangeAll(entities);
-    if (numberWithRequirementsV1() == 0 && a1 == -1) a1 = i;
+    if (numberWithRequirementsV1() == 0 && a1a == -1) a1a = i;
+    if (numberWithRequirementsV1() != 0) a1b = i;
     if (numberWithRequirementsV2() == 0 && a2 == -1) a2 = i;
     if (entities.some((el) => el.money < 0) && a3 == -1) a3 = i;
     if (detectError1(entities) && a4 == -1) a4 = i;
   }
-  console.log("a1", a1, "a2", a2, "a3", a3, "a4", a4, detectError1(entities));
+  console.log(
+    "a1a",
+    a1a,
+    "a1b",
+    a1b,
+    "a2",
+    a2,
+    "a3",
+    a3,
+    "a4",
+    a4,
+    detectError1(entities)
+  );
   printStats();
   console.log({ min, max });
 }
