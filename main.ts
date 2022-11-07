@@ -56,7 +56,7 @@ function forEachOne(resource_number: number) {
     if (!used.includes(resource)) used.push(resource);
 
     entities.push({
-      money: 10000000,
+      money: 20000,
       resources: used.reduce((a, res) => {
         const sign = resource == res ? +100 : -1;
         const total_quantity = randIntV2(30, 200);
@@ -173,6 +173,8 @@ function calculateTotalCost(entity: IEntity) {
     }, 0);
 }
 
+let first = false;
+
 function produce(entity: IEntity) {
   captureMin("money", entity.money);
   captureMax("money", entity.money);
@@ -191,16 +193,21 @@ function produce(entity: IEntity) {
         entity.resources[resource].total_quantity;
       const resource_cost =
         cost_per_unit * entity.resources[resource].produced_consumed;
-      entity.resources[resource].total_quantity +=
-        entity.resources[resource].produced_consumed;
       if (
-        entity.resources[resource].produced_consumed >
-        entity.resources[resource].total_quantity
+        entity.resources[resource].produced_consumed < 0 &&
+        entity.resources[resource].total_quantity +
+          entity.resources[resource].produced_consumed >
+          0
       )
         return;
+      entity.resources[resource].total_quantity +=
+        entity.resources[resource].produced_consumed;
       if (entity.resources[resource].produced_consumed < 0) {
         // if the resource is spent then cost is reduced and sent to produced resource
-        entity.resources[resource].total_spent_money -= resource_cost;
+        entity.resources[resource].total_spent_money -= Math.min(
+          entity.resources[resource].total_spent_money,
+          Math.abs(resource_cost)
+        );
       } else {
         entity.resources[resource].total_spent_money -= Math.min(
           (total_cost * entity.resources[resource].selling_price) /
@@ -208,6 +215,24 @@ function produce(entity: IEntity) {
           entity.resources[resource].total_spent_money
         );
       }
+
+      if (
+        entity.resources[resource].total_spent_money ==
+          Number.POSITIVE_INFINITY &&
+        entity.resources[resource].produced_consumed < 0 &&
+        !first
+      ) {
+        first = true;
+        console.log({
+          pc: entity.resources[resource].produced_consumed < 0,
+          resource_cost,
+          total_selling_price,
+          cost_per_unit,
+          total_spent_money: entity.resources[resource].total_spent_money,
+          total_quantity: entity.resources[resource].total_quantity,
+        });
+      }
+
       if (entity.resources[resource].total_spent_money < 0) {
         throw new Error(
           [
@@ -288,6 +313,18 @@ function exchangeAll(entities: IEntity[]) {
             const production_cost_per_item = total_spent_money / total_quantity;
             const production_cost = production_cost_per_item * quantity;
 
+            // if (production_cost == Number.POSITIVE_INFINITY)
+            //   console.log({
+            //     label: "????",
+            //     quantity,
+            //     selling_price,
+            //     selling_cost,
+            //     production_cost_per_item,
+            //     total_spent_money,
+            //     total_quantity,
+            //     production_cost,
+            //   });
+
             if (production_cost < 0) {
               console.log("4!", total_spent_money, total_quantity, quantity);
               throw new Error();
@@ -305,6 +342,9 @@ function exchangeAll(entities: IEntity[]) {
               buyer.resources[resource].total_spent_money += selling_cost;
               seller.resources[resource].total_quantity -= quantity;
               seller.resources[resource].total_spent_money -= production_cost;
+
+              captureMax("selling_cost", selling_cost);
+              captureMax("production_cost", production_cost);
 
               if (buyer.resources[resource].total_spent_money < -0.00001) {
                 console.log(seller.resources[resource]);
@@ -357,12 +397,19 @@ function detectError1(entities: IEntity[]) {
     .reduce((a, b) => a + b, 0);
 }
 
+function sumMoney() {
+  return entities.map((el) => el.money).reduce((a, b) => a + b, 0);
+}
+
 async function main() {
   let a1a = -1;
   let a1b = -1;
   let a2 = -1;
   let a3 = -1;
   let a4 = -1;
+
+  console.log("begin money", sumMoney());
+
   for (let i = 0; i < 5000; i++) {
     produceAll(entities);
     exchangeAll(entities);
@@ -372,6 +419,9 @@ async function main() {
     if (entities.some((el) => el.money < 0) && a3 == -1) a3 = i;
     if (detectError1(entities) && a4 == -1) a4 = i;
   }
+
+  console.log("end money", sumMoney());
+
   console.log(
     "a1a",
     a1a,
